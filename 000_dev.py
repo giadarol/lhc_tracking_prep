@@ -1,36 +1,59 @@
-from cpymad.madx import Madx
+# TODO:
+# no 4d in the defaults --> use twiss4d/twiss6d methods
+# search closed orbit where?
+# models integrators
+# cycle to ip7?
+# how to set octupoles
+# experimental magnets
+# crabs from the beginning?, no correctors?
+
+
 import xtrack as xt
 
-mad = Madx()
-mad.input(
-    '''
-    ! Get the toolkit
-    call,file="macro.madx";
-    call,file="lhc.seq";
+# Load lattice
+lhc = xt.load('lhc.json')
 
-    !Install HL-LHC
-    call, file="hllhc_sequence.madx";
+# Load optics
+lhc.vars.load('opt_round_150_1500.madx')
 
-    ! Install crab cavities (they are off)
-    call, file='enable_crabcavities.madx';
-    on_crab1 = 0;
-    on_crab5 = 0;
+# Cycle
+lhc.b1.cycle('ip3')
+lhc.b2.cycle('ip3')
 
-    beam, sequence=lhcb1, particle=proton, pc=7000;
-    beam, sequence=lhcb2, particle=proton, pc=7000, bv=-1;
+# Reference particles
+lhc.b1.set_particle_ref('proton', p0c=7000e9)
+lhc.b2.set_particle_ref('proton', p0c=7000e9)
 
-    set, format="12d", "-18.12e", "25s";
-    save, file="temp_lhc_thick.seq";
+# Twiss
+twb1 = lhc.b1.twiss4d()
+twb2 = lhc.b2.twiss4d()
 
-    ''')
+opt_chrom = lhc.b1.match(
+    solve=False,
+    method='4d',
+    vary=xt.VaryList(['ksf.b1', 'ksd.b1'], step=1e-4),
+    targets=xt.TargetSet(dqx=20, dqy=20, tol=1e-4),
+)
+opt_chrom.solve()
 
-env = xt.load('temp_lhc_thick.seq', s_tol=1e-6,
-              _rbend_correct_k0=True, # LHC sequences are defined with rbarc=False
-              reverse_lines=['lhcb2'])
 
+bump_settings = dict(
+    on_x1=250,            # [urad]
+    on_sep1=0,            # [mm]
+    on_x2=-170,           # [urad]
+    on_sep2=0.138,        # [mm]
+    on_x5=250,            # [urad]
+    on_sep5=0,            # [mm]
+    on_x8=-250,           # [urad]
+    on_sep8=-0.043,       # [mm]
+    on_disp=1,            # Value to choose could be optics-dependent
+)
 
-env.lhcb1.twiss_default['method'] = '4d'
-env.lhcb2.twiss_default['method'] = '4d'
-env.lhcb2.twiss_default['reverse'] = True
+lhc.vars.update(bump_settings)
 
-env.to_json('lhc.json')
+# Sextupolar error in on one of the inner triplet quadrupoles
+# (to have some feed-down on the orbit)
+lhc['mqxfa.a3l5/lhcb1'].knl[2] = 0.0002
+lhc['mqxfa.a3l1/lhcb1'].knl[2] = 0.0002
+lhc['mqxfa.a3r1/lhcb1'].knl[2] = -0.0002
+lhc['mqxfa.a3r5/lhcb1'].knl[2] = -0.0002
