@@ -110,3 +110,22 @@ tw_after_correction = lhc.b1.twiss4d()
 
 tw_before_correction.cols['x y px py'].rows['ip1|ip5'].show()
 tw_after_correction.cols['x y px py'].rows['ip1|ip5'].show()
+
+# Read beam-beam config from config file
+import xmask as xm
+with open('config.yaml','r') as fid:
+    config = xm.yaml.load(fid)
+config_bb = config['config_beambeam']
+
+# Install beam-beam lenses (inactive and not configured)
+lhc.install_beambeam_interactions(
+    clockwise_line='b1',
+    anticlockwise_line='b2',
+    ip_names=['ip1', 'ip2', 'ip5', 'ip8'],
+    delay_at_ips_slots=[0, 891, 0, 2670],
+    num_long_range_encounters_per_side=
+        config_bb['num_long_range_encounters_per_side'],
+    num_slices_head_on=config_bb['num_slices_head_on'],
+    harmonic_number=35640,
+    bunch_spacing_buckets=config_bb['bunch_spacing_buckets'],
+    sigmaz=config_bb['sigma_z'])
